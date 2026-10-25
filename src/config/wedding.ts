@@ -41,6 +41,9 @@ export const wedding = {
   rsvp: {
     // Public Apps Script URL (ends with /exec). Prefer setting VITE_RSVP_ENDPOINT in .env.local / Netlify.
     endpoint: import.meta.env.VITE_RSVP_ENDPOINT ?? '',
+    // DEMO ONLY: while no endpoint is set, show success without saving anything.
+    // Set to false before sending links to real guests.
+    demoMode: true,
     askAttendeeCount: true,
     maxAttendees: 15,
   },

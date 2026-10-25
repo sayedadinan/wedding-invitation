@@ -37,9 +37,9 @@ function createId(): string {
 /** Resolves only when the backend confirms the row was written. */
 export async function submitRsvp({ status, count, guestName }: RsvpPayload): Promise<void> {
   const endpoint = wedding.rsvp.endpoint.trim();
-  if (!endpoint && import.meta.env.DEV) {
-    // Local preview only (npm run dev). Production builds never reach this branch.
-    console.warn('[RSVP] No endpoint set — simulating a save for local preview. Nothing was recorded.');
+  if (!endpoint && (import.meta.env.DEV || wedding.rsvp.demoMode)) {
+    // Demo / local preview: no backend configured, so nothing is recorded.
+    console.warn('[RSVP] No endpoint set — demo mode, nothing was recorded.');
     await new Promise((r) => setTimeout(r, 900));
     return;
   }
