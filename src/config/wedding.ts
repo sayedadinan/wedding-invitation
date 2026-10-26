@@ -6,65 +6,101 @@
  * ─────────────────────────────────────────────────────────────
  */
 
+export interface WeddingEvent {
+  id: string;
+  name: string;
+  /** ISO date-time with the venue's UTC offset. India = +05:30. */
+  dateTime: string;
+  /** Leave null if the end time isn't known; the calendar file then only sets a start time. */
+  durationMinutes: number | null;
+  venueName: string;
+  address: string;
+  /** Google Maps share link. If empty, a search link is built from the venue + address. */
+  mapsUrl: string;
+  /** The highlighted event (shown on the cover and venue section). */
+  main?: boolean;
+}
+
+export interface MealOption {
+  /** Stable id sent to the sheet — must match MEALS in apps-script/Code.gs. */
+  id: string;
+  label: string;
+}
+
+const events: WeddingEvent[] = [
+  {
+    id: 'nikah',
+    name: 'Nikah',
+    dateTime: '2027-01-29T11:00:00+05:30',
+    durationMinutes: null,
+    venueName: '[Auditorium Name]',
+    address: 'Beypore, Kozhikode, Kerala',
+    mapsUrl: 'https://maps.app.goo.gl/eu4yMNxkELA6tiav6',
+    main: true,
+  },
+];
+
+const meals: MealOption[] = [
+  { id: 'beef-biriyani', label: 'Beef biriyani' },
+  { id: 'neychoru-stew', label: 'Neychoru + stew curry' },
+];
+
 export const wedding = {
   couple: {
     bride: 'Nidha Fathima',
     groom: "[Groom's Name]",
   },
 
-  event: {
-    title: 'Nikah',
-    // ISO date-time with the venue's UTC offset. India = +05:30.
-    dateTime: '2027-01-29T11:00:00+05:30',
-    timeZone: 'Asia/Kolkata',
-  },
+  timeZone: 'Asia/Kolkata',
+  events,
 
-  venue: {
-    name: '[Auditorium Name]',
-    address: 'Beypore, Kozhikode, Kerala',
-    // A Google Maps share link. If left empty, a search link is built from the name + address.
-    mapsUrl: 'https://maps.app.goo.gl/eu4yMNxkELA6tiav6',
+  invitation: {
+    bismillah: 'بسم الله الرحمن الرحيم',
+    bismillahTransliteration: 'Bismillahir Rahmanir Raheem',
+    line: 'With the blessings of Allah, we joyfully invite you to celebrate the wedding of',
+    presence: 'Your presence and duas would make our celebration even more special.',
+    verse: 'And He placed between you affection and mercy.',
+    verseReference: 'Surah Ar-Rum 30:21',
+    closing: 'We look forward to celebrating this special occasion with you.',
+    familySignOff: 'With love, the families of',
   },
 
   contact: {
-    // Shown on the invitation pass as a "Call" button. Include the country code.
+    // Shown as a "Call for details" button. Include the country code.
     phone: '[+91 XXXXX XXXXX]',
   },
-
-  verse: {
-    text: 'And He placed between you affection and mercy.',
-    reference: 'Surah Ar-Rum 30:21',
-  },
-
-  familySignOff: 'With love, the families of',
 
   rsvp: {
     // Public Apps Script URL (ends with /exec). Prefer setting VITE_RSVP_ENDPOINT in .env.local / Netlify.
     endpoint: import.meta.env.VITE_RSVP_ENDPOINT ?? '',
-    // DEMO ONLY: while no endpoint is set, show success without saving anything.
-    // Set to false before sending links to real guests.
+    // While no endpoint is set, the form runs as a clearly labelled demo (nothing is sent).
     demoMode: true,
-    askAttendeeCount: true,
     maxAttendees: 15,
+    meals,
+    mealNote: 'ആദ്യം വരുമെന്ന് പറയൂ… ഭക്ഷണം നമുക്ക് സെറ്റ് ചെയ്യാം 😄',
   },
 
   audio: {
-    // Path inside /public. Starts when the guest taps "Open Invitation". Set to '' to disable.
+    // Path inside /public. Never autoplays — only plays when the guest taps the music button. '' disables it.
     src: '/audio/nasheed.mp3',
     volume: 0.5,
   },
 
   theme: {
-    emerald: '#123D32',
-    forest: '#0B2923',
-    ivory: '#F8F4EA',
-    gold: '#C6A96B', // champagne gold, used on dark green
-    goldDeep: '#8C6B30', // antique gold, used on ivory so it stays readable
-    white: '#FFFFFF',
-    decline: '#9A3B3B',
+    paper: '#FBF6EE',
+    paperDeep: '#F3E9DA',
+    wine: '#5C1626',
+    wineDeep: '#3B0D18',
+    ink: '#2B1A1D',
+    muted: '#6B5358',
+    gold: '#B48A4A',
+    goldText: '#8A6530', // darker gold for text on ivory (readable contrast)
+    line: '#E3D3BC',
   },
 } as const;
 
 export type WeddingConfig = typeof wedding;
 
 export const isPlaceholder = (value: string) => /^\s*\[.*\]\s*$/.test(value);
+
+export const mainEvent: WeddingEvent = events.find((e) => e.main) ?? events[0];

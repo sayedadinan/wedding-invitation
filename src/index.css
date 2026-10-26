@@ -2,24 +2,30 @@
 
 /* Colours come from src/config/wedding.ts (applied in main.tsx); these are fallbacks. */
 :root {
-  --c-emerald: #123d32;
-  --c-forest: #0b2923;
-  --c-ivory: #f8f4ea;
-  --c-gold: #c6a96b;
-  --c-goldDeep: #8c6b30;
-  --c-white: #ffffff;
-  --c-decline: #9a3b3b;
+  --c-paper: #fbf6ee;
+  --c-paperDeep: #f3e9da;
+  --c-wine: #5c1626;
+  --c-wineDeep: #3b0d18;
+  --c-ink: #2b1a1d;
+  --c-muted: #6b5358;
+  --c-gold: #b48a4a;
+  --c-goldText: #8a6530;
+  --c-line: #e3d3bc;
 }
 
 @theme inline {
-  --color-emerald: var(--c-emerald);
-  --color-forest: var(--c-forest);
-  --color-ivory: var(--c-ivory);
+  --color-paper: var(--c-paper);
+  --color-paper-deep: var(--c-paperDeep);
+  --color-wine: var(--c-wine);
+  --color-wine-deep: var(--c-wineDeep);
+  --color-ink: var(--c-ink);
+  --color-muted: var(--c-muted);
   --color-gold: var(--c-gold);
-  --color-gold-deep: var(--c-goldDeep);
-  --color-decline: var(--c-decline);
-  --font-serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
-  --font-sans: "Jost", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --color-gold-text: var(--c-goldText);
+  --color-line: var(--c-line);
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-body: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-ml: "Manjari", "Noto Sans Malayalam", "Kartika", sans-serif;
   --font-arabic: "Reem Kufi", "Noto Kufi Arabic", "Segoe UI", sans-serif;
 }
 
@@ -28,76 +34,35 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+/* Paper: ivory base with a faint fibre grain. */
 body {
   margin: 0;
-  background: var(--c-forest);
-  color: var(--c-ivory);
-  font-family: var(--font-sans);
+  color: var(--c-ink);
+  font-family: var(--font-body);
+  background-color: var(--c-paper);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .22 0 0 0 0 .12 0 0 0 .06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }
 
 :focus-visible {
-  outline: 2px solid var(--c-gold);
+  outline: 2px solid var(--c-wine);
   outline-offset: 3px;
+  border-radius: 4px;
 }
 
-/* Subtle Islamic geometric lattice (8-point stars), tinted via --pattern-color. */
-/* In the components layer so utilities like `fixed` can still override position. */
-@layer components {
-.pattern {
-  position: relative;
-  isolation: isolate;
-}
-}
-.pattern::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-color: var(--pattern-color, var(--c-gold));
-  opacity: var(--pattern-opacity, 0.07);
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'%3E%3Cg fill='none' stroke='black' stroke-width='1'%3E%3Crect x='28' y='28' width='40' height='40'/%3E%3Crect x='28' y='28' width='40' height='40' transform='rotate(45 48 48)'/%3E%3Ccircle cx='48' cy='48' r='9'/%3E%3Cpath d='M0 0L28 28M96 0L68 28M0 96L28 68M96 96L68 68'/%3E%3C/g%3E%3C/svg%3E") repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'%3E%3Cg fill='none' stroke='black' stroke-width='1'%3E%3Crect x='28' y='28' width='40' height='40'/%3E%3Crect x='28' y='28' width='40' height='40' transform='rotate(45 48 48)'/%3E%3Ccircle cx='48' cy='48' r='9'/%3E%3Cpath d='M0 0L28 28M96 0L68 28M0 96L28 68M96 96L68 68'/%3E%3C/g%3E%3C/svg%3E") repeat;
-  -webkit-mask-size: 96px 96px;
-  mask-size: 96px 96px;
-}
-.pattern-emerald {
-  --pattern-color: var(--c-emerald);
-  --pattern-opacity: 0.06;
+/* Hollow numerals for the date motif. */
+.numeral-outline {
+  color: transparent;
+  -webkit-text-stroke: 1px var(--c-gold);
 }
 
-@keyframes soft-glow {
-  0%, 100% { opacity: 0.55; }
-  50% { opacity: 1; }
-}
-.soft-glow {
-  animation: soft-glow 5s ease-in-out infinite;
-}
-
-.petal {
-  position: absolute;
-  top: -4%;
-  border-radius: 80% 0 80% 0;
-  opacity: 0;
-  animation-name: petal-fall;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-}
-.petal-gold {
-  background: linear-gradient(135deg, color-mix(in oklab, var(--c-gold) 70%, white), var(--c-gold));
-}
-.petal-ivory {
-  background: linear-gradient(135deg, var(--c-white), var(--c-ivory));
-}
-@keyframes petal-fall {
-  0% { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 0; }
-  10% { opacity: 0.6; }
-  50% { transform: translate3d(40px, 55vh, 0) rotate(240deg); }
-  85% { opacity: 0.45; }
-  100% { transform: translate3d(-10px, 110vh, 0) rotate(480deg); opacity: 0; }
+/* Deckled card: soft paper with a hairline and a low lift. */
+.paper-card {
+  background: color-mix(in oklab, var(--c-paperDeep) 70%, var(--c-paper));
+  border: 1px solid var(--c-line);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.6) inset, 0 14px 30px -22px rgb(59 13 24 / 0.35);
 }
 
 @media (prefers-reduced-motion: reduce) {

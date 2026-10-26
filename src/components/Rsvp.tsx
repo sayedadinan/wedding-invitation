@@ -1,278 +1,339 @@
-import { useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { AlertCircle, CalendarDays, Check, Clock, Heart, Loader2, MapPin, Minus, Navigation, Plus } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { AlertCircle, Check, CircleHelp, Info, Loader2, Pencil, X } from 'lucide-react';
 import { wedding } from '../config/wedding';
-import { formatEventDate } from '../lib/date';
-import { mapsLink } from '../lib/links';
-import { RsvpError, submitRsvp, type RsvpStatus } from '../lib/rsvp';
+import { emptyMeals, isValidAttendance, mealGap, type MealCounts } from '../lib/meals';
 import { ease } from '../lib/motion';
-import { Confetti } from './Confetti';
-import { Countdown } from './Countdown';
-import { Divider } from './Ornament';
-import { PassCard } from './PassCard';
+import { isDemo, RsvpError, submitRsvp, type RsvpResult, type RsvpStatus } from '../lib/rsvp';
+import { Reveal } from './Reveal';
+import { SectionLabel } from './SectionLabel';
+import { Stepper } from './Stepper';
 
-type Step =
-  | { kind: 'choose' }
-  | { kind: 'count' }
-  | { kind: 'submitting'; status: RsvpStatus }
-  | { kind: 'done'; status: RsvpStatus; count: number }
-  | { kind: 'error'; status: RsvpStatus; count: number; message: string };
+const MAX_NAME = 60;
+
+const STATUS_OPTIONS: { value: RsvpStatus; label: string; icon: typeof Check }[] = [
+  { value: 'attending', label: 'Attending', icon: Check },
+  { value: 'declined', label: 'Unable to attend', icon: X },
+  { value: 'maybe', label: 'Not sure yet', icon: CircleHelp },
+];
+
+const STATUS_LABEL: Record<RsvpStatus, string> = {
+  attending: 'Attending',
+  declined: 'Unable to attend',
+  maybe: 'Not sure yet',
+};
 
 const panel = {
-  initial: { opacity: 0, y: 12 },
+  initial: { opacity: 0, y: 10 },
   animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -8 },
-  transition: { duration: 0.45, ease },
+  exit: { opacity: 0, y: -6 },
+  transition: { duration: 0.35, ease },
 };
 
 const primaryBtn =
-  'inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-full px-6 py-4 text-base font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60';
-const detailCard = 'flex flex-col items-center rounded-2xl border border-gold/30 bg-emerald/70 px-4 py-5';
-const linkBtn ='mt-4 min-h-11 text-sm text-ivory/60 underline-offset-4 hover:text-ivory hover:underline';
+  'flex min-h-14 w-full items-center justify-center gap-2 rounded-full bg-wine px-6 font-semibold text-paper transition-colors hover:bg-wine-deep disabled:cursor-not-allowed disabled:opacity-45';
+const ghostBtn =
+  'flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-wine/40 px-6 text-sm font-semibold text-wine transition-colors hover:bg-wine/5';
+
+const people = (n: number) => `${n} ${n === 1 ? 'person' : 'people'}`;
 
 export function Rsvp({ guestName }: { guestName: string | null }) {
-  const { askAttendeeCount, maxAttendees } = wedding.rsvp;
+  const { maxAttendees, meals: mealOptions, mealNote } = wedding.rsvp;
   const max = Math.max(1, Math.floor(maxAttendees));
-  const event = formatEventDate(wedding.event.dateTime, wedding.event.timeZone);
-  const reduceMotion = useReducedMotion();
+  const demo = isDemo();
 
-  const [step, setStep] = useState<Step>({ kind: 'choose' });
+  const [view, setView] = useState<'form' | 'review' | 'done'>('form');
+  const [name, setName] = useState(guestName ?? '');
+  const [status, setStatus] = useState<RsvpStatus | null>(null);
   const [count, setCount] = useState(1);
-  const [burst, setBurst] = useState(0);
+  const [meals, setMeals] = useState<MealCounts>(() => emptyMeals(mealOptions.map((m) => m.id)));
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<RsvpResult | null>(null);
   const inFlight = useRef(false);
-  const sectionRef = useRef<HTMLElement>(null);
 
-  const confirmedYes = step.kind === 'done' && step.status === 'attending';
+  const attending = status === 'attending';
+  const gap = mealGap(count, meals);
+  const canReview = status !== null && (!attending || isValidAttendance(count, meals, max));
+  const cleanName = name.replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, MAX_NAME);
 
-  useEffect(() => {
-    if (step.kind === 'done') {
-      sectionRef.current?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
-    }
-  }, [step.kind, reduceMotion]);
-
-  async function send(status: RsvpStatus, attendees: number) {
-    if (inFlight.current) return; // guard against double taps
-    const n = status === 'declined' ? 0 : attendees;
-    if (status === 'attending' && (!Number.isInteger(n) || n < 1 || n > max)) {
-      setStep({ kind: 'error', status, count: 1, message: `Please choose between 1 and ${max} guests.` });
-      return;
-    }
-
+  async function send() {
+    if (inFlight.current || !status) return; // guard against double taps
     inFlight.current = true;
-    setStep({ kind: 'submitting', status });
+    setSubmitting(true);
+    setError(null);
     try {
-      await submitRsvp({ status, count: n, guestName });
-      setStep({ kind: 'done', status, count: n });
-      if (status === 'attending') setBurst((b) => b + 1);
+      const res = await submitRsvp({
+        status,
+        count: attending ? count : 0,
+        meals: attending ? meals : {},
+        guestName: cleanName || null,
+      });
+      setResult(res);
+      setView('done');
     } catch (err) {
-      const message = err instanceof RsvpError ? err.message : 'Something went wrong. Please try again.';
-      setStep({ kind: 'error', status, count: n, message });
+      setError(err instanceof RsvpError ? err.message : 'Something went wrong. Please try again.');
     } finally {
       inFlight.current = false;
+      setSubmitting(false);
     }
   }
 
-  function chooseYes() {
-    setBurst((b) => b + 1);
-    if (askAttendeeCount) setStep({ kind: 'count' });
-    else void send('attending', 1);
-  }
+  const summary = (
+    <dl className="divide-y divide-line text-left">
+      <SummaryRow term="Name" detail={cleanName || 'Not given'} />
+      <SummaryRow term="Attendance" detail={status ? STATUS_LABEL[status] : '—'} />
+      {attending && (
+        <>
+          <SummaryRow term="Number attending" detail={people(count)} />
+          <SummaryRow
+            term="Meals"
+            detail={
+              <ul className="space-y-0.5 text-right">
+                {mealOptions
+                  .filter((m) => meals[m.id] > 0)
+                  .map((m) => (
+                    <li key={m.id}>
+                      {meals[m.id]} × {m.label}
+                    </li>
+                  ))}
+              </ul>
+            }
+          />
+        </>
+      )}
+    </dl>
+  );
 
   return (
-    <section
-      id="rsvp"
-      ref={sectionRef}
-      className="pattern min-h-dvh scroll-mt-0 bg-forest px-5 py-14 text-center"
-      aria-labelledby="rsvp-heading"
-    >
-      <Confetti burst={burst} />
+    <section id="rsvp" className="scroll-mt-4 px-6 py-16 sm:px-12" aria-labelledby="rsvp-heading">
+      <div className="mx-auto max-w-2xl">
+        <SectionLabel index="04" label="RSVP" />
+        <Reveal>
+          <h2 id="rsvp-heading" className="mt-8 font-display text-4xl font-light leading-tight text-ink">
+            Coming to celebrate with us?
+          </h2>
+        </Reveal>
 
-      <div className="mx-auto max-w-md">
-        {!confirmedYes && (
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.3 }}
-            transition={{ duration: 0.8, ease }}
-          >
-            <p className="text-[0.7rem] uppercase tracking-[0.3em] text-gold">Save the date</p>
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              <div className={detailCard}>
-                <CalendarDays className="text-gold" size={22} strokeWidth={1.4} aria-hidden="true" />
-                <p className="mt-2 font-serif text-2xl text-ivory">{event ? event.weekday : 'Date'}</p>
-                <p className="text-sm text-ivory/70">{event ? event.date : 'To be announced'}</p>
-              </div>
-              <div className={detailCard}>
-                <Clock className="text-gold" size={22} strokeWidth={1.4} aria-hidden="true" />
-                <p className="mt-2 font-serif text-2xl text-ivory">{wedding.event.title}</p>
-                <p className="text-sm text-ivory/70">{event ? event.time : 'To be announced'}</p>
-              </div>
-              <div className={`${detailCard} col-span-2`}>
-                <MapPin className="text-gold" size={22} strokeWidth={1.4} aria-hidden="true" />
-                <p className="mt-2 font-serif text-2xl text-ivory">{wedding.venue.name}</p>
-                <p className="text-sm text-ivory/70">{wedding.venue.address}</p>
-                <a
-                  href={mapsLink()}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-full border border-gold/70 px-6 text-xs uppercase tracking-[0.2em] text-ivory transition-colors hover:bg-gold hover:text-forest"
-                >
-                  <Navigation size={15} aria-hidden="true" />
-                  Get Directions
-                </a>
-              </div>
-            </div>
-
-            {event && (
-              <div className="mt-8">
-                <Countdown target={event.timestamp} />
-              </div>
-            )}
-
-            <Divider className="my-9" />
-          </motion.div>
+        {demo && (
+          <p className="mt-5 flex gap-2 rounded-xl border border-gold/50 bg-gold/10 px-4 py-3 text-sm text-ink">
+            <Info size={18} className="mt-0.5 shrink-0 text-gold-text" aria-hidden="true" />
+            <span>
+              <strong>Demo preview.</strong> This form isn’t connected to the family’s sheet yet, so responses are not
+              sent.
+            </span>
+          </p>
         )}
 
-        <div aria-live="polite">
+        <div className="paper-card mt-8 rounded-3xl p-5 sm:p-7" aria-live="polite">
           <AnimatePresence mode="wait">
-            {step.kind === 'choose' && (
-              <motion.div key="choose" {...panel}>
-                <h2 id="rsvp-heading" className="mb-6 font-serif text-3xl text-ivory sm:text-4xl">
-                  Will you be joining us?
-                </h2>
-                <div className="space-y-3">
-                  <motion.button
-                    type="button"
-                    whileTap={{ scale: 0.97 }}
-                    onClick={chooseYes}
-                    className={`${primaryBtn} border border-gold/50 bg-emerald text-ivory shadow-lg shadow-black/25 hover:bg-[#185243]`}
-                  >
-                    <Heart size={18} aria-hidden="true" />
-                    Yes, Insha'Allah
-                  </motion.button>
-                  <motion.button
-                    type="button"
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => send('declined', 0)}
-                    className={`${primaryBtn} border border-decline/70 bg-decline/15 text-ivory hover:bg-decline/35`}
-                  >
-                    Regretfully, unable to attend
-                  </motion.button>
-                </div>
+            {view === 'form' && (
+              <motion.form
+                key="form"
+                {...panel}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (canReview) setView('review');
+                }}
+                noValidate
+              >
+                <label htmlFor="rsvp-name" className="text-sm font-semibold text-ink">
+                  Your name <span className="font-normal text-muted">(optional)</span>
+                </label>
+                <input
+                  id="rsvp-name"
+                  type="text"
+                  autoComplete="name"
+                  maxLength={MAX_NAME}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="mt-2 min-h-12 w-full rounded-xl border border-line bg-paper px-4 text-base text-ink placeholder:text-muted/60 focus:border-wine"
+                  placeholder="So the family knows who replied"
+                />
+
+                <fieldset className="mt-7">
+                  <legend className="text-sm font-semibold text-ink">Will you attend?</legend>
+                  <div className="mt-3 grid gap-2.5">
+                    {STATUS_OPTIONS.map(({ value, label, icon: Icon }) => {
+                      const selected = status === value;
+                      return (
+                        <label
+                          key={value}
+                          className={`flex min-h-14 cursor-pointer items-center gap-3 rounded-2xl border px-4 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-wine ${
+                            selected ? 'border-wine bg-wine text-paper' : 'border-line bg-paper text-ink hover:border-wine/40'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="attendance"
+                            value={value}
+                            checked={selected}
+                            onChange={() => setStatus(value)}
+                            className="sr-only"
+                          />
+                          <span
+                            className={`flex size-8 items-center justify-center rounded-full ${
+                              selected ? 'bg-paper/15' : 'bg-wine/5 text-wine'
+                            }`}
+                            aria-hidden="true"
+                          >
+                            <Icon size={17} />
+                          </span>
+                          <span className="font-semibold">{label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+
+                <AnimatePresence initial={false}>
+                  {attending && (
+                    <motion.div
+                      key="attending-details"
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.35, ease }}
+                      className="overflow-hidden"
+                    >
+                      <div className="mt-8 border-t border-line pt-7">
+                        <p className="text-sm font-semibold text-ink">How many people are coming, including you?</p>
+                        <div className="mt-3 flex items-center justify-between gap-3">
+                          <Stepper label="People attending" value={count} min={1} max={max} onChange={setCount} />
+                          <span className="text-xs text-muted">Up to {max}</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-8 border-t border-line pt-7">
+                        <p className="text-sm font-semibold text-ink">What would your group prefer?</p>
+                        <p lang="ml" className="mt-1.5 font-ml text-[0.95rem] leading-relaxed text-muted">
+                          {mealNote}
+                        </p>
+                        <ul className="mt-4 space-y-3">
+                          {mealOptions.map((m) => (
+                            <li key={m.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-paper px-4 py-3">
+                              <span className="font-medium text-ink">{m.label}</span>
+                              <Stepper
+                                label={m.label}
+                                value={meals[m.id]}
+                                min={0}
+                                max={max}
+                                onChange={(v) => setMeals((prev) => ({ ...prev, [m.id]: v }))}
+                              />
+                            </li>
+                          ))}
+                        </ul>
+                        <p
+                          className={`mt-3 flex items-center gap-2 text-sm font-medium ${gap === 0 ? 'text-[#2f6b4f]' : 'text-wine'}`}
+                          aria-live="polite"
+                        >
+                          {gap === 0 ? (
+                            <>
+                              <Check size={16} aria-hidden="true" /> Meals for all {people(count)} chosen
+                            </>
+                          ) : gap > 0 ? (
+                            <>
+                              <AlertCircle size={16} aria-hidden="true" /> Choose meals for {people(gap)} more
+                            </>
+                          ) : (
+                            <>
+                              <AlertCircle size={16} aria-hidden="true" /> {-gap} meal{gap === -1 ? '' : 's'} too many for{' '}
+                              {people(count)}. Please reduce a choice.
+                            </>
+                          )}
+                        </p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <button type="submit" disabled={!canReview} className={`${primaryBtn} mt-8`}>
+                  Review my response
+                </button>
+                {status === null && <p className="mt-2 text-center text-xs text-muted">Choose an option above to continue.</p>}
+              </motion.form>
+            )}
+
+            {view === 'review' && (
+              <motion.div key="review" {...panel}>
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-gold-text">Please check</p>
+                <div className="mt-3">{summary}</div>
+
+                {error && (
+                  <p className="mt-5 flex gap-2 rounded-xl bg-wine/10 px-4 py-3 text-sm text-wine" role="alert">
+                    <AlertCircle size={18} className="mt-0.5 shrink-0" aria-hidden="true" />
+                    {error}
+                  </p>
+                )}
+
+                <button type="button" onClick={send} disabled={submitting} className={`${primaryBtn} mt-7`}>
+                  {submitting ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" aria-hidden="true" /> Sending…
+                    </>
+                  ) : error ? (
+                    'Try again'
+                  ) : demo ? (
+                    'Submit (demo)'
+                  ) : (
+                    'Send response'
+                  )}
+                </button>
+                <button type="button" onClick={() => setView('form')} disabled={submitting} className={`${ghostBtn} mt-3`}>
+                  <Pencil size={15} aria-hidden="true" /> Edit
+                </button>
               </motion.div>
             )}
 
-            {step.kind === 'count' && (
-              <motion.div key="count" {...panel} role="group" aria-labelledby="count-label">
-                <motion.p
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ type: 'spring', stiffness: 260, damping: 16 }}
-                  className="font-serif text-4xl text-gold"
-                >
-                  Wonderful!
-                </motion.p>
-                <p id="count-label" className="mt-3 font-serif text-2xl text-ivory">
-                  How many guests will be attending, including you?
-                </p>
-                <div className="mt-6 flex items-center justify-center gap-6">
-                  <button
-                    type="button"
-                    aria-label="Fewer guests"
-                    disabled={count <= 1}
-                    onClick={() => setCount((c) => Math.max(1, c - 1))}
-                    className="flex size-12 items-center justify-center rounded-full border border-gold/60 text-gold transition-colors hover:bg-gold/15 disabled:opacity-30"
-                  >
-                    <Minus size={20} aria-hidden="true" />
-                  </button>
-                  <output className="w-16 font-serif text-6xl tabular-nums text-ivory" aria-live="polite">
-                    {count}
-                  </output>
-                  <button
-                    type="button"
-                    aria-label="More guests"
-                    disabled={count >= max}
-                    onClick={() => setCount((c) => Math.min(max, c + 1))}
-                    className="flex size-12 items-center justify-center rounded-full border border-gold/60 text-gold transition-colors hover:bg-gold/15 disabled:opacity-30"
-                  >
-                    <Plus size={20} aria-hidden="true" />
-                  </button>
-                </div>
-                <p className="mt-2 text-xs text-ivory/50">Up to {max}</p>
-                <button
-                  type="button"
-                  onClick={() => send('attending', count)}
-                  className={`${primaryBtn} mt-7 border border-gold/50 bg-emerald text-ivory hover:bg-[#185243]`}
-                >
-                  <Check size={18} aria-hidden="true" />
-                  Confirm
-                </button>
-                <button type="button" onClick={() => setStep({ kind: 'choose' })} className={linkBtn}>
-                  Back
-                </button>
-              </motion.div>
-            )}
-
-            {step.kind === 'submitting' && (
-              <motion.div key="submitting" {...panel} className="flex flex-col items-center gap-4 py-10" role="status">
-                <Loader2 className="animate-spin text-gold" size={32} aria-hidden="true" />
-                <p className="text-ivory/80">Saving your response…</p>
-              </motion.div>
-            )}
-
-            {step.kind === 'error' && (
-              <motion.div key="error" {...panel} role="alert">
-                <AlertCircle className="mx-auto text-[#e08a8a]" size={30} aria-hidden="true" />
-                <p className="mt-4 text-ivory">{step.message}</p>
-                <button
-                  type="button"
-                  onClick={() => send(step.status, step.count)}
-                  className={`${primaryBtn} mt-7 border border-gold/60 bg-gold/10 text-ivory hover:bg-gold/25`}
-                >
-                  Try again
-                </button>
-                <button type="button" onClick={() => setStep({ kind: 'choose' })} className={linkBtn}>
-                  Back
-                </button>
-              </motion.div>
-            )}
-
-            {step.kind === 'done' && step.status === 'attending' && (
-              <motion.div key="done-yes" {...panel}>
-                <p className="font-serif text-4xl text-gold">Alhamdulillah!</p>
-                <p className="mt-2 font-serif text-3xl text-ivory">We can't wait to see you</p>
-                <p className="mt-2 text-sm text-ivory/70">
-                  Thank you for confirming. We look forward to celebrating this special occasion with you.
-                </p>
-                <PassCard guestName={guestName} count={step.count} />
-                <button type="button" onClick={() => setStep({ kind: 'choose' })} className={`${linkBtn} mt-6`}>
-                  Change my response
-                </button>
-              </motion.div>
-            )}
-
-            {step.kind === 'done' && step.status === 'declined' && (
-              <motion.div key="done-no" {...panel}>
-                <Heart className="mx-auto text-gold" size={28} aria-hidden="true" />
-                <p className="mt-4 font-serif text-3xl text-ivory">Thank you for letting us know.</p>
-                <p className="mt-2 text-ivory/75">You will be in our thoughts and duas.</p>
-                <button type="button" onClick={() => setStep({ kind: 'choose' })} className={`${linkBtn} mt-6`}>
-                  Change my response
+            {view === 'done' && result && status && (
+              <motion.div key="done" {...panel} className="text-center">
+                {result.saved ? (
+                  <>
+                    <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-wine text-paper">
+                      <Check size={26} aria-hidden="true" />
+                    </span>
+                    <p className="mt-5 font-display text-3xl text-ink">Your response has been sent.</p>
+                    <p className="mt-2 text-muted">
+                      {status === 'attending' && wedding.invitation.closing}
+                      {status === 'declined' && 'Thank you for letting us know. You will be in our thoughts and duas.'}
+                      {status === 'maybe' && 'Thank you. Please update your response when you know.'}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <span className="mx-auto flex size-14 items-center justify-center rounded-full border border-gold text-gold-text">
+                      <Info size={24} aria-hidden="true" />
+                    </span>
+                    <p className="mt-5 font-display text-3xl text-ink">Demo preview</p>
+                    <p className="mt-2 text-muted">
+                      This response was <strong>not sent</strong>. The RSVP isn’t connected to the family’s sheet yet, so
+                      nothing was recorded.
+                    </p>
+                  </>
+                )}
+                <div className="mt-6 rounded-2xl bg-paper px-4 py-2">{summary}</div>
+                <button type="button" onClick={() => setView('form')} className={`${ghostBtn} mt-6`}>
+                  <Pencil size={15} aria-hidden="true" /> Change my response
                 </button>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
-        <p className="mt-10 text-xs leading-relaxed text-ivory/40">
-          Your response{guestName ? ' and the name in your invitation link' : ''} is recorded only to help the
-          family plan the wedding. It is not shared with other guests.
-        </p>
-        <p className="mt-8 text-[0.68rem] uppercase tracking-[0.25em] text-ivory/45">{wedding.familySignOff}</p>
-        <p className="mt-1 font-serif text-lg text-ivory/70">
-          {wedding.couple.bride} &amp; {wedding.couple.groom}
+        <p className="mt-6 text-xs leading-relaxed text-muted">
+          Your name, attendance and meal choices are recorded only to help the family plan the wedding. They are not
+          shown to other guests.
         </p>
       </div>
     </section>
+  );
+}
+
+function SummaryRow({ term, detail }: { term: string; detail: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-3">
+      <dt className="text-sm text-muted">{term}</dt>
+      <dd className="text-right font-semibold text-ink">{detail}</dd>
+    </div>
   );
 }

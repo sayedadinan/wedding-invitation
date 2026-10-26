@@ -1,17 +1,24 @@
 import { wedding } from '../config/wedding';
 
-export type RsvpStatus = 'attending' | 'declined';
+export type RsvpStatus = 'attending' | 'declined' | 'maybe';
 
 export interface RsvpPayload {
   status: RsvpStatus;
   count: number;
+  /** Meal id → quantity. Only meaningful when attending; must add up to `count`. */
+  meals: Record<string, number>;
   guestName: string | null;
 }
+
+/** `saved: false` means demo mode — nothing reached the host. */
+export type RsvpResult = { saved: true } | { saved: false; demo: true };
 
 export class RsvpError extends Error {}
 
 const SUBMISSION_KEY = 'wedding-rsvp-submission-id';
 const TIMEOUT_MS = 20000;
+
+let fallbackId: string | undefined;
 
 /** One id per browser so a changed answer updates the same row instead of adding a new one. */
 export function getSubmissionId(): string {
@@ -27,26 +34,25 @@ export function getSubmissionId(): string {
   }
 }
 
-let fallbackId: string | undefined;
-
 function createId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
-/** Resolves only when the backend confirms the row was written. */
-export async function submitRsvp({ status, count, guestName }: RsvpPayload): Promise<void> {
+export const isDemo = () => !wedding.rsvp.endpoint.trim() && (import.meta.env.DEV || wedding.rsvp.demoMode);
+
+/** Resolves with `saved: true` only when the backend confirms the row was written. */
+export async function submitRsvp({ status, count, meals, guestName }: RsvpPayload): Promise<RsvpResult> {
   const endpoint = wedding.rsvp.endpoint.trim();
-  if (!endpoint && (import.meta.env.DEV || wedding.rsvp.demoMode)) {
-    // Demo / local preview: no backend configured, so nothing is recorded.
-    console.warn('[RSVP] No endpoint set — demo mode, nothing was recorded.');
-    await new Promise((r) => setTimeout(r, 900));
-    return;
-  }
   if (!endpoint) {
+    if (isDemo()) {
+      await new Promise((r) => setTimeout(r, 700));
+      return { saved: false, demo: true };
+    }
     throw new RsvpError('RSVP is not connected yet. Please try again a little later.');
   }
 
+  const attending = status === 'attending';
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
@@ -58,9 +64,10 @@ export async function submitRsvp({ status, count, guestName }: RsvpPayload): Pro
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
         submissionId: getSubmissionId(),
-        guestName: guestName ?? 'Guest',
+        guestName: guestName || 'Guest',
         status,
-        count: status === 'declined' ? 0 : count,
+        count: attending ? count : 0,
+        meals: attending ? meals : {},
         website: '', // honeypot, must stay empty
       }),
       signal: controller.signal,
@@ -83,4 +90,5 @@ export async function submitRsvp({ status, count, guestName }: RsvpPayload): Pro
   if (!data || data.ok !== true) {
     throw new RsvpError('Your response could not be saved. Please try again.');
   }
+  return { saved: true };
 }

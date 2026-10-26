@@ -1,9 +1,8 @@
-import { isPlaceholder, wedding } from '../config/wedding';
+import { isPlaceholder, wedding, type WeddingEvent } from '../config/wedding';
 
-export function mapsLink(): string {
-  const { mapsUrl, name, address } = wedding.venue;
-  if (mapsUrl.trim()) return mapsUrl.trim();
-  const query = isPlaceholder(name) ? address : `${name}, ${address}`;
+export function mapsLink(event: WeddingEvent): string {
+  if (event.mapsUrl.trim()) return event.mapsUrl.trim();
+  const query = isPlaceholder(event.venueName) ? event.address : `${event.venueName}, ${event.address}`;
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 

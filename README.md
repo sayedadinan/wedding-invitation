@@ -1,6 +1,6 @@
 # Nidha Fathima — Wedding Invitation
 
-A mobile-first Islamic wedding invitation. It's built with React, TypeScript, Vite, Tailwind CSS and Framer Motion. RSVPs are saved to Google Sheets through a Google Apps Script web app, and the site is hosted on Netlify's free tier.
+A mobile-first wedding invitation with an editorial layout (ivory paper, burgundy and gold), built with React, TypeScript, Vite, Tailwind CSS and Framer Motion. RSVPs (attendance, guest count, meal choices) go to a private Google Sheet through a Google Apps Script web app. It's hosted on Netlify.
 
 ## Run locally
 
@@ -11,119 +11,81 @@ npm run build      # production build into dist/
 npm run preview    # serve the build locally
 ```
 
-Personalised links: `http://localhost:5173/?name=Adinan` shows "An exclusive invitation for **Adinan**". With no name, it shows "for **You**".
+Personalised links: `http://localhost:5173/?name=Adinan` shows "For Adinan" on the cover and pre-fills the RSVP name. The name is optional.
 
-In `npm run dev` with no endpoint set, the RSVP simulates a save so you can preview the confetti and pass card. Nothing is recorded, and production builds never do this.
+## Page structure
+
+1. **Cover**: invitation line, couple's names, date and place, and a "View celebration details" button.
+2. **01 The invitation**: Bismillah, invitation wording, ayah, family sign-off.
+3. **02 Celebration plan**: timeline of the configured events (main event highlighted) with days-to-go.
+4. **03 Venue & directions**: Get directions, Add to calendar (.ics), Call for details.
+5. **04 RSVP**: Attending / Unable to attend / Not sure yet. "Attending" adds the guest count and meal split, and the meal total must equal the guest count. The guest reviews, then submits.
+6. **Closing**: closing line, names, back to top.
+
+Music never autoplays. The "Nasheed" button appears after the guest scrolls past the cover.
 
 ## Edit the wedding details
 
-Everything lives in **`src/config/wedding.ts`**: names, date and time, venue, map link, family message, colours, nasheed path, attendee settings.
-Values in `[square brackets]` are placeholders. Replace them before sharing the link.
+Everything lives in **`src/config/wedding.ts`**. Values in `[square brackets]` are placeholders.
 
 | What | Field |
 |---|---|
 | Groom's name | `couple.groom` |
-| Phone for "Call us" | `contact.phone` |
-| Date & time | `event.dateTime` (e.g. `2027-01-29T11:00:00+05:30`) |
-| Venue | `venue.name`, `venue.address`, `venue.mapsUrl` |
-| Message | `message.body` |
-| Max guests per RSVP | `rsvp.maxAttendees` (also update `MAX_ATTENDEES` in `apps-script/Code.gs`) |
-| Skip the guest-count step | `rsvp.askAttendeeCount: false` |
-| Music | `audio.src` (file in `public/audio/`), or `''` to disable |
-
-## Project structure
-
-```
-src/
-  config/wedding.ts      ← all editable content
-  components/            Opening (cover), Hero (names + ayah), Rsvp (date cards, countdown, RSVP flow),
-                         PassCard, Countdown, Confetti, Petals, AudioToggle, Ornament
-  hooks/                 useCountdown, useAudio
-  lib/                   guestName (URL parsing), rsvp (backend call), date formatting, links (maps / phone)
-apps-script/Code.gs      Google Apps Script backend
-public/audio/            nasheed.mp3
-netlify.toml             build + SPA redirect + headers
-```
+| Events (name, date/time, venue, map link) | `events` (add more entries for more events; mark one `main: true`) |
+| Phone for "Call for details" | `contact.phone` |
+| Wording | `invitation.*` |
+| Max guests per RSVP | `rsvp.maxAttendees` (also `MAX_ATTENDEES` in `apps-script/Code.gs`) |
+| Meal options | `rsvp.meals` (keep the ids in sync with `MEALS` in `apps-script/Code.gs`) |
+| Music | `audio.src`, or `''` to disable |
 
 ## Google Sheets + Apps Script setup
 
-1. Go to <https://sheets.new> and create a sheet called, for example, *Nidha Wedding RSVP*. **Do not** publish or share it publicly.
-2. Open **Extensions → Apps Script**. Delete the sample code, paste in the contents of `apps-script/Code.gs`, and save.
-3. Click **Deploy → New deployment**. Click the gear icon, choose **Web app**, and set:
-   - Execute as: **Me**
-   - Who has access: **Anyone**
-4. Click **Deploy**, then **Authorize access**. Choose your Google account. If you see "Google hasn't verified this app", click **Advanced → Go to (project) (unsafe)** and then **Allow**. This is normal for your own script.
-5. Copy the **Web app URL**. It ends in `/exec`.
-6. Test it: open the URL in a browser. You should see `{"ok":true,"message":"RSVP endpoint is running."}`.
-   Then test a write from a terminal:
+1. Create a new Google Sheet at <https://sheets.new>. **Do not** share or publish it.
+2. Open **Extensions → Apps Script**, replace the code with `apps-script/Code.gs`, and click **Save**.
+3. Click **Deploy → New deployment → ⚙ Web app**. Set "Execute as" to **Me** and "Who has access" to **Anyone**, then click **Deploy** and **Authorize**. If you see "Google hasn't verified this app", click **Advanced → Go to … → Allow**. This is normal for your own script.
+4. Copy the **Web app URL** (ends in `/exec`). Opening it should show `{"ok":true,"message":"RSVP endpoint is running."}`.
+5. Test a write:
    ```bash
-   curl -L -H "Content-Type: text/plain" -d '{"submissionId":"test-12345678","guestName":"Test","status":"attending","count":2,"website":""}' "YOUR_EXEC_URL"
+   curl -L -H "Content-Type: text/plain" -d '{"submissionId":"test-12345678","guestName":"Test","status":"attending","count":2,"meals":{"beef-biriyani":1,"neychoru-stew":1},"website":""}' "YOUR_EXEC_URL"
    ```
-   It should return `{"ok":true}`, and a row should appear in the **RSVP** tab. The header row is created automatically. Delete the test row afterwards.
+   This should return `{"ok":true}` and add a row to the **RSVP** tab. Delete the test row afterwards.
 
-**Sheet columns:** Guest Name | Status (Attending/Declined) | Count of Members | Updated Date | Submission ID
+**RSVP tab:** Guest Name | Status (Attending / Declined / Not sure yet) | Count of Members | Beef biriyani | Neychoru + stew curry | Updated Date | Submission ID
 
-> If you edit `Code.gs` later, use **Deploy → Manage deployments → Edit (pencil) → Version: New version → Deploy**. That keeps the same URL. A *New deployment* creates a new URL.
+**Summary tab:** created automatically, with live totals for guests attending, each meal, not sure and declined. The sheet is the host's private management view, and nothing is ever returned to the website.
+
+> If you edit `Code.gs` later, use **Deploy → Manage deployments → ✎ → Version: New version**. That keeps the same URL.
+> If you created the sheet with the older 3- or 5-column layout, delete the old RSVP and Summary tabs (or start a new sheet) so the new headers are created.
 
 ## Connect the frontend
 
-Create a `.env.local` file next to `package.json`:
+Add the URL to `.env.local` (locally) or in Netlify under **Site configuration → Environment variables**:
 
 ```
 VITE_RSVP_ENDPOINT=https://script.google.com/macros/s/XXXX/exec
 ```
 
-Restart `npm run dev`. Until this is set, the RSVP buttons show an honest "RSVP is not connected yet" message. They never show a fake success.
-
-The request is sent as `Content-Type: text/plain`, a "simple" CORS request that Apps Script web apps accept without a preflight. The frontend shows success only when the script replies `{"ok":true}`, which it does only after the row has been written (`SpreadsheetApp.flush()`).
+**Demo mode:** while no endpoint is set and `rsvp.demoMode` is `true`, the RSVP shows a "Demo preview" banner. After submitting, it says "This response was not sent". It never claims the family received anything. With an endpoint set, it says "Your response has been sent" only after the script confirms the row was written. The script validates everything server-side, including that meal quantities add up to the guest count.
 
 ## Deploy to Netlify
 
-**Option A: drag and drop (fastest)**
-1. Put `VITE_RSVP_ENDPOINT` in `.env.local`, then run `npm run build`.
-2. Go to <https://app.netlify.com/drop> and drag the `dist` folder onto the page.
-3. Under **Site configuration → Change site name**, pick something like `nidha-wedding` to get `nidha-wedding.netlify.app`.
-
-**Option B: from GitHub (auto-deploys on every push)**
-1. Push this folder to a GitHub repository.
-2. In Netlify, go to **Add new site → Import an existing project** and choose the repository. The build settings are read from `netlify.toml` (`npm run build`, publish folder `dist`).
-3. Under **Site configuration → Environment variables**, add `VITE_RSVP_ENDPOINT` with your `/exec` URL. Then redeploy.
+Build settings come from `netlify.toml` (`npm run build`, publish folder `dist`). Either connect the GitHub repo in Netlify, or run `npm run build` and drag `dist` onto <https://app.netlify.com/drop>.
 
 ## Honest limitations
 
-- **The `?name=` value is only a greeting label.** Anyone can type any name, so it does not verify who is responding.
-- **Duplicates:** each browser gets a random Submission ID (stored in localStorage). Changing your answer in the same browser updates the same row. Without a guest list or a unique token per guest, there is no way to tell whether two submissions from different phones or browsers came from the same person.
-- **Public endpoint:** anyone who finds the Apps Script URL can send fabricated submissions. The script validates every field, limits lengths, rejects formula injection, has a honeypot field, and rate-limits each ID. These measures reduce abuse but cannot prevent it completely. Review the sheet before relying on the totals.
-- The endpoint never returns sheet data, and the sheet itself stays private.
-
-## Privacy
-
-The site collects only the name from the link, the RSVP status and the guest count. It includes no analytics, no tracking and no ads. The Google Fonts stylesheet is the only third-party request.
+- The `?name=` value and the optional name field are labels, not proof of identity.
+- Each browser gets a random Submission ID, so changing an answer in the same browser updates the same row. Replies from different phones can't be matched to the same person without a guest list.
+- The Apps Script URL is public. Validation, length limits, formula-injection protection, a honeypot field and per-ID rate limiting reduce abuse but can't prevent fabricated submissions entirely.
 
 ## Testing checklist
 
-- [ ] `/` shows "An exclusive invitation for **You**"
-- [ ] `/?name=Adinan` shows **Adinan**
-- [ ] `/?name=Muhammad%20Ali` shows **Muhammad Ali**
-- [ ] `/?name=<script>alert(1)</script>` shows **You** (rejected)
-- [ ] "Yes, Insha'Allah" → choose count → a row appears with Attending + the chosen count
-- [ ] "Regretfully, unable to attend" → a row appears with Declined + 0
-- [ ] Changing the answer in the same browser updates the same row
-- [ ] With the endpoint unset, or with Wi-Fi off, an error and **Try again** appear and no success message is shown
-- [ ] Double-tapping a button produces one row
-- [ ] Music starts only after **Open Invitation**, and the bottom-right button mutes and unmutes it
-- [ ] "Yes" shows confetti → guest count → "We can't wait to see you" + Invitation Pass
-- [ ] Renaming `public/audio/nasheed.mp3` hides the music button, and the site still works
-- [ ] With OS "reduce motion" turned on, content appears without movement
-- [ ] Phone, tablet and desktop all work with no sideways scrolling
-- [ ] The deployed Netlify site saves an RSVP to the sheet
-
-## Troubleshooting
-
-| Problem | Fix |
-|---|---|
-| "RSVP is not connected yet" | `VITE_RSVP_ENDPOINT` is missing. Add it to `.env.local` or Netlify, then rebuild |
-| "Could not reach the server" | Check that the URL ends in `/exec` and that access is set to **Anyone** |
-| Changes to the script have no effect | Redeploy as a **New version** (see above) |
-| No sound | Browsers allow sound only after a tap. Check the mute button and the phone's silent switch |
-| WhatsApp preview is outdated | WhatsApp caches previews. Add `&v=2` to the link |
+- [ ] `/` shows "Wedding invitation"; `/?name=Adinan` shows "For Adinan" and pre-fills the name
+- [ ] `/?name=<script>alert(1)</script>` is rejected (no name shown)
+- [ ] Get directions opens the Maps link; Add to calendar downloads an .ics file with the correct date and time
+- [ ] Attending: count 4, meals 2 + 2 → review shows both; 2 + 1 shows "Choose meals for 1 person more"; 2 + 3 shows "too many"
+- [ ] "Review my response" is disabled until the meals match the count
+- [ ] Unable to attend / Not sure yet: no count or meals asked; the sheet stores 0
+- [ ] Demo mode: banner visible, result says "not sent"
+- [ ] Connected: a row appears in the sheet; with Wi-Fi off, an error and "Try again" appear (no false success)
+- [ ] Double-tapping Send creates one row
+- [ ] Narrow phone (360px): no sideways scrolling; reduce-motion setting respected
