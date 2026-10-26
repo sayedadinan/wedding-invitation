@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { CalendarPlus, MapPin, Navigation, Phone } from 'lucide-react';
 import { mainEvent } from '../config/wedding';
-import { downloadIcs } from '../lib/calendar';
+import { googleCalendarUrl, ICS_PATH } from '../lib/calendar';
 import { mapsLink, phoneLink } from '../lib/links';
+import { ease } from '../lib/motion';
 import { Reveal } from './Reveal';
 import { SectionLabel } from './SectionLabel';
 
@@ -11,7 +13,8 @@ const secondaryBtn =
 
 export function Venue() {
   const tel = phoneLink();
-  const [calendarFailed, setCalendarFailed] = useState(false);
+  const google = googleCalendarUrl(mainEvent);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   return (
     <section className="px-6 py-16 sm:px-12" aria-labelledby="venue-heading">
@@ -36,7 +39,13 @@ export function Venue() {
           </a>
 
           <div className="mt-3 grid grid-cols-2 gap-3">
-            <button type="button" className={secondaryBtn} onClick={() => setCalendarFailed(!downloadIcs(mainEvent))}>
+            <button
+              type="button"
+              className={secondaryBtn}
+              aria-expanded={calendarOpen}
+              aria-controls="calendar-options"
+              onClick={() => setCalendarOpen((o) => !o)}
+            >
               <CalendarPlus size={17} aria-hidden="true" />
               Add to calendar
             </button>
@@ -46,20 +55,41 @@ export function Venue() {
                 Call for details
               </a>
             ) : (
-              <span
-                className={`${secondaryBtn} cursor-not-allowed border-line text-muted/60 hover:bg-transparent`}
-                title="Phone number coming soon"
-              >
+              <span className={`${secondaryBtn} cursor-not-allowed border-line text-muted/60 hover:bg-transparent`}>
                 <Phone size={17} aria-hidden="true" />
                 Call for details
               </span>
             )}
           </div>
-          {calendarFailed && (
-            <p className="mt-3 text-sm text-wine" role="alert">
-              Sorry, the calendar file couldn’t be created.
-            </p>
-          )}
+
+          <AnimatePresence initial={false}>
+            {calendarOpen && (
+              <motion.div
+                id="calendar-options"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.3, ease }}
+                className="overflow-hidden"
+              >
+                <div className="mt-3 grid gap-2 rounded-2xl bg-paper p-3">
+                  {google && (
+                    <a href={google} target="_blank" rel="noopener noreferrer" className={secondaryBtn}>
+                      Google Calendar <span className="font-normal text-muted">· Android</span>
+                    </a>
+                  )}
+                  <a href={ICS_PATH} className={secondaryBtn}>
+                    Apple / Outlook <span className="font-normal text-muted">· iPhone</span>
+                  </a>
+                  <p className="px-1 pt-1 text-xs leading-relaxed text-muted">
+                    {google
+                      ? 'Google adds the Nikah. The Apple / Outlook file adds every event, with a reminder the day before.'
+                      : 'Adds every event, with a reminder the day before.'}
+                  </p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </Reveal>
       </div>
     </section>

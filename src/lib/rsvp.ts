@@ -10,9 +10,6 @@ export interface RsvpPayload {
   guestName: string | null;
 }
 
-/** `saved: false` means demo mode — nothing reached the host. */
-export type RsvpResult = { saved: true } | { saved: false; demo: true };
-
 export class RsvpError extends Error {}
 
 const SUBMISSION_KEY = 'wedding-rsvp-submission-id';
@@ -39,15 +36,17 @@ function createId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
-export const isDemo = () => !wedding.rsvp.endpoint.trim() && (import.meta.env.DEV || wedding.rsvp.demoMode);
-
-/** Resolves with `saved: true` only when the backend confirms the row was written. */
-export async function submitRsvp({ status, count, meals, guestName }: RsvpPayload): Promise<RsvpResult> {
+/**
+ * Resolves only when the backend confirms the row was written.
+ * Exception: with no endpoint and demoMode on, it resolves without saving (for promo videos).
+ */
+export async function submitRsvp({ status, count, meals, guestName }: RsvpPayload): Promise<void> {
   const endpoint = wedding.rsvp.endpoint.trim();
   if (!endpoint) {
-    if (isDemo()) {
+    if (wedding.rsvp.demoMode || import.meta.env.DEV) {
+      console.warn('[RSVP] No endpoint set — demo mode, nothing was recorded.');
       await new Promise((r) => setTimeout(r, 700));
-      return { saved: false, demo: true };
+      return;
     }
     throw new RsvpError('RSVP is not connected yet. Please try again a little later.');
   }
@@ -90,5 +89,4 @@ export async function submitRsvp({ status, count, meals, guestName }: RsvpPayloa
   if (!data || data.ok !== true) {
     throw new RsvpError('Your response could not be saved. Please try again.');
   }
-  return { saved: true };
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { MotionConfig } from 'framer-motion';
+import { AnimatePresence, MotionConfig } from 'framer-motion';
 import { wedding } from './config/wedding';
 import { getGuestName } from './lib/guestName';
 import { useAudio } from './hooks/useAudio';
@@ -14,32 +14,36 @@ import { MusicToggle } from './components/MusicToggle';
 export default function App() {
   const guestName = useMemo(() => getGuestName(), []);
   const audio = useAudio(wedding.audio.src, wedding.audio.volume);
-  const pastCover = usePastCover();
+  const [opened, setOpened] = useState(false);
+
+  // The cover is its own screen: no scrolling until the guest taps through.
+  useEffect(() => {
+    document.body.style.overflow = opened ? '' : 'hidden';
+  }, [opened]);
+
+  const handleOpen = () => {
+    void audio.play(); // started by the tap, so browsers allow it
+    window.scrollTo(0, 0);
+    setOpened(true);
+  };
 
   return (
     <MotionConfig reducedMotion="user">
-      <div id="top" />
-      <Cover guestName={guestName} />
-      <main>
-        <InvitationMessage />
-        <Timeline />
-        <Venue />
-        <Rsvp guestName={guestName} />
-      </main>
-      <Closing />
-      {audio.available && (pastCover || audio.playing) && <MusicToggle playing={audio.playing} onToggle={audio.toggle} />}
+      <AnimatePresence>{!opened && <Cover key="cover" guestName={guestName} onOpen={handleOpen} />}</AnimatePresence>
+
+      {opened && (
+        <>
+          <div id="top" />
+          <main>
+            <InvitationMessage />
+            <Timeline />
+            <Venue />
+            <Rsvp guestName={guestName} />
+          </main>
+          <Closing />
+          {audio.available && <MusicToggle playing={audio.playing} onToggle={audio.toggle} />}
+        </>
+      )}
     </MotionConfig>
   );
-}
-
-/** True once the guest has scrolled most of the way past the cover, so the floating button never hides its CTA. */
-function usePastCover() {
-  const [past, setPast] = useState(false);
-  useEffect(() => {
-    const onScroll = () => setPast(window.scrollY > window.innerHeight * 0.6);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-  return past;
 }

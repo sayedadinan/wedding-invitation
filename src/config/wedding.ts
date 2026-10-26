@@ -1,8 +1,10 @@
 /**
  * ─────────────────────────────────────────────────────────────
  *  WEDDING CONFIGURATION — edit this file only.
- *  Values in [square brackets] are placeholders still to be filled in.
  *  Never put passwords or secret keys here: everything in this file is public.
+ *
+ *  NOTE: the couple, dates, venue and phone below are SAMPLE content for a
+ *  promo video. Replace them before sending the link to real guests.
  * ─────────────────────────────────────────────────────────────
  */
 
@@ -11,7 +13,7 @@ export interface WeddingEvent {
   name: string;
   /** ISO date-time with the venue's UTC offset. India = +05:30. */
   dateTime: string;
-  /** Leave null if the end time isn't known; the calendar file then only sets a start time. */
+  /** Used for the calendar entry's end time. Leave null if unknown (Google Calendar option is then hidden). */
   durationMinutes: number | null;
   venueName: string;
   address: string;
@@ -25,30 +27,50 @@ export interface MealOption {
   /** Stable id sent to the sheet — must match MEALS in apps-script/Code.gs. */
   id: string;
   label: string;
+  /** Which illustration to show. */
+  art: 'biriyani' | 'neychoru';
 }
 
 const events: WeddingEvent[] = [
   {
+    id: 'mylanchi',
+    name: 'Mylanchi Night',
+    dateTime: '2027-02-06T19:00:00+05:30',
+    durationMinutes: 180,
+    venueName: "Bride's Residence",
+    address: 'Feroke, Kozhikode, Kerala',
+    mapsUrl: '',
+  },
+  {
     id: 'nikah',
     name: 'Nikah',
-    dateTime: '2027-01-29T11:00:00+05:30',
-    durationMinutes: null,
-    venueName: '[Auditorium Name]',
-    address: 'Beypore, Kozhikode, Kerala',
-    mapsUrl: 'https://maps.app.goo.gl/eu4yMNxkELA6tiav6',
+    dateTime: '2027-02-07T11:00:00+05:30',
+    durationMinutes: 90,
+    venueName: 'K Hills Auditorium',
+    address: 'Ramanattukara, Kozhikode, Kerala',
+    mapsUrl: '',
     main: true,
+  },
+  {
+    id: 'reception',
+    name: 'Wedding Lunch',
+    dateTime: '2027-02-07T12:30:00+05:30',
+    durationMinutes: 150,
+    venueName: 'K Hills Auditorium',
+    address: 'Ramanattukara, Kozhikode, Kerala',
+    mapsUrl: '',
   },
 ];
 
 const meals: MealOption[] = [
-  { id: 'beef-biriyani', label: 'Beef biriyani' },
-  { id: 'neychoru-stew', label: 'Neychoru + stew curry' },
+  { id: 'beef-biriyani', label: 'Beef biriyani', art: 'biriyani' },
+  { id: 'neychoru-stew', label: 'Neychoru + stew curry', art: 'neychoru' },
 ];
 
 export const wedding = {
   couple: {
-    bride: 'Nidha Fathima',
-    groom: "[Groom's Name]",
+    bride: 'Aysha',
+    groom: 'Azhar',
   },
 
   timeZone: 'Asia/Kolkata',
@@ -66,14 +88,15 @@ export const wedding = {
   },
 
   contact: {
-    // Shown as a "Call for details" button. Include the country code.
-    phone: '[+91 XXXXX XXXXX]',
+    // Shown as a "Call for details" button. Include the country code. (Sample number — replace.)
+    phone: '+91 98765 43210',
   },
 
   rsvp: {
     // Public Apps Script URL (ends with /exec). Prefer setting VITE_RSVP_ENDPOINT in .env.local / Netlify.
-    endpoint: import.meta.env.VITE_RSVP_ENDPOINT ?? '',
-    // While no endpoint is set, the form runs as a clearly labelled demo (nothing is sent).
+    endpoint: import.meta.env?.VITE_RSVP_ENDPOINT ?? '',
+    // While no endpoint is set, submissions show the normal thank-you screen WITHOUT saving anything.
+    // Fine for a promo video; set to false before sharing with real guests.
     demoMode: true,
     maxAttendees: 15,
     meals,
@@ -81,7 +104,7 @@ export const wedding = {
   },
 
   audio: {
-    // Path inside /public. Never autoplays — only plays when the guest taps the music button. '' disables it.
+    // Path inside /public. Starts when the guest taps "View celebration details". '' disables it.
     src: '/audio/nasheed.mp3',
     volume: 0.5,
   },

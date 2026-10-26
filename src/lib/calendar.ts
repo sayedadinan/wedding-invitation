@@ -1,44 +1,50 @@
 import { wedding, type WeddingEvent } from '../config/wedding';
 import { mapsLink } from './links';
 
-const toIcsDate = (ms: number) => new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+/** Path of the calendar file generated at build time (see vite.config.ts). */
+export const ICS_PATH = '/wedding.ics';
+
+const toUtcStamp = (ms: number) => new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
 const escape = (text: string) => text.replace(/\\/g, '\\\\').replace(/[,;]/g, (m) => `\\${m}`).replace(/\n/g, '\\n');
+const title = (event: WeddingEvent) => `${event.name} — ${wedding.couple.bride} & ${wedding.couple.groom}`;
 
-/** Builds an .ics file from the configured event. Only includes an end time when one is configured. */
-export function buildIcs(event: WeddingEvent): string | null {
-  const start = Date.parse(event.dateTime);
-  if (Number.isNaN(start)) return null;
-  const { bride, groom } = wedding.couple;
-
-  const lines = [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//nidha-wedding//invitation//EN',
-    'CALSCALE:GREGORIAN',
-    'BEGIN:VEVENT',
-    `UID:${event.id}-${start}@nidha-wedding`,
-    `DTSTAMP:${toIcsDate(Date.now())}`,
-    `DTSTART:${toIcsDate(start)}`,
-    ...(event.durationMinutes ? [`DTEND:${toIcsDate(start + event.durationMinutes * 60_000)}`] : []),
-    `SUMMARY:${escape(`${event.name} — ${bride} & ${groom}`)}`,
-    `LOCATION:${escape(`${event.venueName}, ${event.address}`)}`,
-    `DESCRIPTION:${escape(`Directions: ${mapsLink(event)}`)}`,
-    'END:VEVENT',
-    'END:VCALENDAR',
-  ];
+/** One .ics file containing every configured event, each with a reminder the day before. */
+export function buildIcs(events: readonly WeddingEvent[] = wedding.events): string {
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//wedding-invitation//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH'];
+  for (const event of events) {
+    const start = Date.parse(event.dateTime);
+    if (Number.isNaN(start)) continue;
+    lines.push(
+      'BEGIN:VEVENT',
+      `UID:${event.id}-${start}@wedding-invitation`,
+      `DTSTAMP:${toUtcStamp(Date.now())}`,
+      `DTSTART:${toUtcStamp(start)}`,
+      ...(event.durationMinutes ? [`DTEND:${toUtcStamp(start + event.durationMinutes * 60_000)}`] : []),
+      `SUMMARY:${escape(title(event))}`,
+      `LOCATION:${escape(`${event.venueName}, ${event.address}`)}`,
+      `DESCRIPTION:${escape(`Directions: ${mapsLink(event)}`)}`,
+      'BEGIN:VALARM',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:${escape(title(event))}`,
+      'TRIGGER:-P1D',
+      'END:VALARM',
+      'END:VEVENT',
+    );
+  }
+  lines.push('END:VCALENDAR');
   return lines.join('\r\n');
 }
 
-export function downloadIcs(event: WeddingEvent): boolean {
-  const ics = buildIcs(event);
-  if (!ics) return false;
-  const url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${event.id}-invitation.ics`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-  return true;
+/** Google Calendar "add event" link. Needs an end time, so returns null without a duration. */
+export function googleCalendarUrl(event: WeddingEvent): string | null {
+  const start = Date.parse(event.dateTime);
+  if (Number.isNaN(start) || !event.durationMinutes) return null;
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: title(event),
+    dates: `${toUtcStamp(start)}/${toUtcStamp(start + event.durationMinutes * 60_000)}`,
+    location: `${event.venueName}, ${event.address}`,
+    details: `Directions: ${mapsLink(event)}`,
+  });
+  return `https://calendar.google.com/calendar/render?${params}`;
 }

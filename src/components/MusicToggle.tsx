@@ -1,6 +1,6 @@
 import { Music, Pause } from 'lucide-react';
 
-/** Opt-in music: nothing plays until the guest taps this. */
+/** Pause / resume the nasheed that started when the guest opened the invitation. */
 export function MusicToggle({ playing, onToggle }: { playing: boolean; onToggle: () => void }) {
   return (
     <button

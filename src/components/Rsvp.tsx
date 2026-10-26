@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertCircle, Check, CircleHelp, Info, Loader2, Pencil, X } from 'lucide-react';
+import { AlertCircle, Check, CircleHelp, Loader2, Pencil, X } from 'lucide-react';
 import { wedding } from '../config/wedding';
 import { emptyMeals, isValidAttendance, mealGap, type MealCounts } from '../lib/meals';
 import { ease } from '../lib/motion';
-import { isDemo, RsvpError, submitRsvp, type RsvpResult, type RsvpStatus } from '../lib/rsvp';
+import { RsvpError, submitRsvp, type RsvpStatus } from '../lib/rsvp';
+import { MealArt } from './MealArt';
 import { Reveal } from './Reveal';
 import { SectionLabel } from './SectionLabel';
 import { Stepper } from './Stepper';
@@ -37,10 +38,19 @@ const ghostBtn =
 
 const people = (n: number) => `${n} ${n === 1 ? 'person' : 'people'}`;
 
+/** A light, playful verdict once the meals add up. */
+function mealVerdict(meals: MealCounts, options: readonly { id: string; label: string }[]): string {
+  const picked = options.filter((m) => meals[m.id] > 0);
+  if (picked.length === 1) return `Team ${picked[0].label.split(' +')[0]}, all the way! 😋`;
+  const [a, b] = [...picked].sort((x, y) => meals[y.id] - meals[x.id]);
+  if (a && b && meals[a.id] === meals[b.id]) return 'A perfect tie. Very diplomatic! 😄';
+  if (a) return `${a.label.split(' +')[0]} is winning ${meals[a.id]}–${b ? meals[b.id] : 0} 😄`;
+  return '';
+}
+
 export function Rsvp({ guestName }: { guestName: string | null }) {
   const { maxAttendees, meals: mealOptions, mealNote } = wedding.rsvp;
   const max = Math.max(1, Math.floor(maxAttendees));
-  const demo = isDemo();
 
   const [view, setView] = useState<'form' | 'review' | 'done'>('form');
   const [name, setName] = useState(guestName ?? '');
@@ -49,7 +59,6 @@ export function Rsvp({ guestName }: { guestName: string | null }) {
   const [meals, setMeals] = useState<MealCounts>(() => emptyMeals(mealOptions.map((m) => m.id)));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<RsvpResult | null>(null);
   const inFlight = useRef(false);
 
   const attending = status === 'attending';
@@ -63,13 +72,12 @@ export function Rsvp({ guestName }: { guestName: string | null }) {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await submitRsvp({
+      await submitRsvp({
         status,
         count: attending ? count : 0,
         meals: attending ? meals : {},
         guestName: cleanName || null,
       });
-      setResult(res);
       setView('done');
     } catch (err) {
       setError(err instanceof RsvpError ? err.message : 'Something went wrong. Please try again.');
@@ -114,16 +122,6 @@ export function Rsvp({ guestName }: { guestName: string | null }) {
             Coming to celebrate with us?
           </h2>
         </Reveal>
-
-        {demo && (
-          <p className="mt-5 flex gap-2 rounded-xl border border-gold/50 bg-gold/10 px-4 py-3 text-sm text-ink">
-            <Info size={18} className="mt-0.5 shrink-0 text-gold-text" aria-hidden="true" />
-            <span>
-              <strong>Demo preview.</strong> This form isn’t connected to the family’s sheet yet, so responses are not
-              sent.
-            </span>
-          </p>
-        )}
 
         <div className="paper-card mt-8 rounded-3xl p-5 sm:p-7" aria-live="polite">
           <AnimatePresence mode="wait">
@@ -211,8 +209,23 @@ export function Rsvp({ guestName }: { guestName: string | null }) {
                         </p>
                         <ul className="mt-4 space-y-3">
                           {mealOptions.map((m) => (
-                            <li key={m.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-paper px-4 py-3">
-                              <span className="font-medium text-ink">{m.label}</span>
+                            <li
+                              key={m.id}
+                              className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-paper px-3 py-3 transition-colors ${
+                                meals[m.id] > 0 ? 'border-gold/70' : 'border-transparent'
+                              }`}
+                            >
+                              <span className="flex items-center gap-3">
+                                <motion.span
+                                  animate={meals[m.id] > 0 ? { rotate: [0, -6, 6, 0], scale: [1, 1.08, 1] } : {}}
+                                  transition={{ duration: 0.45 }}
+                                  key={meals[m.id]}
+                                  className="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-paper-deep"
+                                >
+                                  <MealArt art={m.art} className="size-14" />
+                                </motion.span>
+                                <span className="font-medium leading-snug text-ink">{m.label}</span>
+                              </span>
                               <Stepper
                                 label={m.label}
                                 value={meals[m.id]}
@@ -229,7 +242,11 @@ export function Rsvp({ guestName }: { guestName: string | null }) {
                         >
                           {gap === 0 ? (
                             <>
-                              <Check size={16} aria-hidden="true" /> Meals for all {people(count)} chosen
+                              <Check size={16} className="shrink-0" aria-hidden="true" />
+                              <span>
+                                Meals for all {people(count)} chosen.{' '}
+                                <span className="font-normal">{mealVerdict(meals, mealOptions)}</span>
+                              </span>
                             </>
                           ) : gap > 0 ? (
                             <>
@@ -273,8 +290,6 @@ export function Rsvp({ guestName }: { guestName: string | null }) {
                     </>
                   ) : error ? (
                     'Try again'
-                  ) : demo ? (
-                    'Submit (demo)'
                   ) : (
                     'Send response'
                   )}
@@ -285,32 +300,24 @@ export function Rsvp({ guestName }: { guestName: string | null }) {
               </motion.div>
             )}
 
-            {view === 'done' && result && status && (
+            {view === 'done' && status && (
               <motion.div key="done" {...panel} className="text-center">
-                {result.saved ? (
-                  <>
-                    <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-wine text-paper">
-                      <Check size={26} aria-hidden="true" />
-                    </span>
-                    <p className="mt-5 font-display text-3xl text-ink">Your response has been sent.</p>
-                    <p className="mt-2 text-muted">
-                      {status === 'attending' && wedding.invitation.closing}
-                      {status === 'declined' && 'Thank you for letting us know. You will be in our thoughts and duas.'}
-                      {status === 'maybe' && 'Thank you. Please update your response when you know.'}
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <span className="mx-auto flex size-14 items-center justify-center rounded-full border border-gold text-gold-text">
-                      <Info size={24} aria-hidden="true" />
-                    </span>
-                    <p className="mt-5 font-display text-3xl text-ink">Demo preview</p>
-                    <p className="mt-2 text-muted">
-                      This response was <strong>not sent</strong>. The RSVP isn’t connected to the family’s sheet yet, so
-                      nothing was recorded.
-                    </p>
-                  </>
-                )}
+                <motion.span
+                  initial={{ scale: 0.6, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: 'spring', stiffness: 260, damping: 18 }}
+                  className="mx-auto flex size-14 items-center justify-center rounded-full bg-wine text-paper"
+                >
+                  <Check size={26} aria-hidden="true" />
+                </motion.span>
+                <p className="mt-5 font-display text-3xl text-ink">
+                  {status === 'attending' ? 'Alhamdulillah! See you there.' : 'Thank you for letting us know.'}
+                </p>
+                <p className="mt-2 text-muted">
+                  {status === 'attending' && wedding.invitation.closing}
+                  {status === 'declined' && 'You will be in our thoughts and duas.'}
+                  {status === 'maybe' && 'Please update your response when you know.'}
+                </p>
                 <div className="mt-6 rounded-2xl bg-paper px-4 py-2">{summary}</div>
                 <button type="button" onClick={() => setView('form')} className={`${ghostBtn} mt-6`}>
                   <Pencil size={15} aria-hidden="true" /> Change my response

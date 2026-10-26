@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { ArrowDown } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { mainEvent, wedding } from '../config/wedding';
 import { formatEventDate } from '../lib/date';
 import { ease } from '../lib/motion';
@@ -10,16 +10,26 @@ const rise = (delay: number) => ({
   transition: { duration: 0.7, delay, ease },
 });
 
-/** First screen: asymmetric editorial layout, names as the focus, date motif on the right edge. */
-export function Cover({ guestName }: { guestName: string | null }) {
+interface CoverProps {
+  guestName: string | null;
+  onOpen: () => void;
+}
+
+/** Full-screen first page. Guests tap the button to turn to the details (music starts on that tap). */
+export function Cover({ guestName, onOpen }: CoverProps) {
   const { bride, groom } = wedding.couple;
   const event = formatEventDate(mainEvent.dateTime, wedding.timeZone);
   const [brideFirst, ...brideRest] = bride.split(' ');
 
   return (
-    <header className="relative flex min-h-dvh flex-col overflow-hidden px-6 pb-8 pt-7 sm:px-12">
+    <motion.section
+      className="paper-bg fixed inset-0 z-40 flex flex-col overflow-y-auto overflow-x-hidden px-6 pb-8 pt-7 sm:px-12"
+      exit={{ opacity: 0, y: '-12%' }}
+      transition={{ duration: 0.7, ease }}
+      aria-label="Invitation cover"
+    >
       {/* Hairline frame with gold corner ticks */}
-      <div className="pointer-events-none absolute inset-3 border border-wine/15 sm:inset-5" aria-hidden="true">
+      <div className="pointer-events-none fixed inset-3 border border-wine/15 sm:inset-5" aria-hidden="true">
         {['left-0 top-0 border-l border-t', 'right-0 top-0 border-r border-t', 'bottom-0 left-0 border-b border-l', 'bottom-0 right-0 border-b border-r'].map(
           (pos) => (
             <span key={pos} className={`absolute size-5 border-gold ${pos}`} />
@@ -56,7 +66,7 @@ export function Cover({ guestName }: { guestName: string | null }) {
           </motion.p>
 
           <h1 className="mt-7 font-display font-light text-wine">
-            <motion.span {...rise(0.3)} className="block text-[3.6rem] leading-[0.95] sm:text-8xl">
+            <motion.span {...rise(0.3)} className="block text-[4.2rem] leading-[0.95] sm:text-8xl">
               {brideFirst}
             </motion.span>
             {brideRest.length > 0 && (
@@ -66,13 +76,13 @@ export function Cover({ guestName }: { guestName: string | null }) {
             )}
             <motion.span
               {...rise(0.5)}
-              className="my-3 flex items-center gap-4 font-display text-4xl italic text-gold sm:text-5xl"
+              className="my-3 flex items-center gap-4 font-display text-5xl italic text-gold"
               aria-label="and"
             >
-              <span className="h-px w-12 bg-gold/60 sm:w-24" aria-hidden="true" />
+              <span className="h-px w-16 bg-gold/60 sm:w-24" aria-hidden="true" />
               &amp;
             </motion.span>
-            <motion.span {...rise(0.6)} className="block text-right text-[2.9rem] leading-[1] sm:text-7xl">
+            <motion.span {...rise(0.6)} className="block text-right text-[4.2rem] italic leading-[0.95] sm:text-8xl">
               {groom}
             </motion.span>
           </h1>
@@ -85,7 +95,7 @@ export function Cover({ guestName }: { guestName: string | null }) {
               <dd className="mt-1 font-medium text-ink">
                 {event ? (
                   <>
-                    {event.weekday}
+                    {event.weekday}, {event.time}
                     <br />
                     {event.date}
                   </>
@@ -96,19 +106,25 @@ export function Cover({ guestName }: { guestName: string | null }) {
             </div>
             <div className="text-right">
               <dt className="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-gold-text">Where</dt>
-              <dd className="mt-1 font-medium text-ink">{mainEvent.address}</dd>
+              <dd className="mt-1 font-medium text-ink">
+                {mainEvent.venueName}
+                <br />
+                <span className="text-muted">{mainEvent.address.split(',').slice(-2, -1)[0]?.trim() ?? mainEvent.address}</span>
+              </dd>
             </div>
           </dl>
 
-          <a
-            href="#invitation"
-            className="mt-6 flex min-h-14 w-full items-center justify-center gap-2 rounded-full bg-wine px-6 text-[0.95rem] font-semibold text-paper transition-colors hover:bg-wine-deep"
+          <motion.button
+            type="button"
+            onClick={onOpen}
+            whileTap={{ scale: 0.98 }}
+            className="mt-6 flex min-h-14 w-full items-center justify-center gap-2 rounded-full bg-wine px-6 text-[0.95rem] font-semibold text-paper shadow-lg shadow-wine/20 transition-colors hover:bg-wine-deep"
           >
             View celebration details
-            <ArrowDown size={18} aria-hidden="true" />
-          </a>
+            <ArrowRight size={18} aria-hidden="true" />
+          </motion.button>
         </motion.div>
       </div>
-    </header>
+    </motion.section>
   );
 }
