@@ -5,6 +5,8 @@ import { wedding } from '../config/wedding';
 import { emptyMeals, isValidAttendance, mealGap, type MealCounts } from '../lib/meals';
 import { ease } from '../lib/motion';
 import { RsvpError, submitRsvp, type RsvpStatus } from '../lib/rsvp';
+import { Poppers, Sparkles } from './Celebration';
+import { CountdownStrip } from './CountdownStrip';
 import { MealArt } from './MealArt';
 import { Reveal } from './Reveal';
 import { SectionLabel } from './SectionLabel';
@@ -59,6 +61,7 @@ export function Rsvp({ guestName }: { guestName: string | null }) {
   const [meals, setMeals] = useState<MealCounts>(() => emptyMeals(mealOptions.map((m) => m.id)));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [burst, setBurst] = useState(0);
   const inFlight = useRef(false);
 
   const attending = status === 'attending';
@@ -79,6 +82,7 @@ export function Rsvp({ guestName }: { guestName: string | null }) {
         guestName: cleanName || null,
       });
       setView('done');
+      if (attending) setBurst((b) => b + 1);
     } catch (err) {
       setError(err instanceof RsvpError ? err.message : 'Something went wrong. Please try again.');
     } finally {
@@ -123,6 +127,7 @@ export function Rsvp({ guestName }: { guestName: string | null }) {
           </h2>
         </Reveal>
 
+        <Poppers burst={burst} />
         <div className="paper-card mt-8 rounded-3xl p-5 sm:p-7" aria-live="polite">
           <AnimatePresence mode="wait">
             {view === 'form' && (
@@ -166,7 +171,10 @@ export function Rsvp({ guestName }: { guestName: string | null }) {
                             name="attendance"
                             value={value}
                             checked={selected}
-                            onChange={() => setStatus(value)}
+                            onChange={() => {
+                              setStatus(value);
+                              if (value === 'attending' && status !== 'attending') setBurst((b) => b + 1);
+                            }}
                             className="sr-only"
                           />
                           <span
@@ -302,14 +310,26 @@ export function Rsvp({ guestName }: { guestName: string | null }) {
 
             {view === 'done' && status && (
               <motion.div key="done" {...panel} className="text-center">
-                <motion.span
-                  initial={{ scale: 0.6, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ type: 'spring', stiffness: 260, damping: 18 }}
-                  className="mx-auto flex size-14 items-center justify-center rounded-full bg-wine text-paper"
-                >
-                  <Check size={26} aria-hidden="true" />
-                </motion.span>
+                <span className="relative mx-auto block size-14">
+                  {status === 'attending' && <Sparkles />}
+                  <motion.span
+                    initial={{ scale: 0.6, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: 'spring', stiffness: 260, damping: 18 }}
+                    className="relative flex size-14 items-center justify-center rounded-full bg-wine text-paper"
+                  >
+                    {status === 'attending' && (
+                      <motion.span
+                        className="absolute inset-0 rounded-full border-2 border-gold"
+                        initial={{ scale: 1, opacity: 0.8 }}
+                        animate={{ scale: 1.9, opacity: 0 }}
+                        transition={{ duration: 1.1, delay: 0.15, ease: 'easeOut' }}
+                        aria-hidden="true"
+                      />
+                    )}
+                    <Check size={26} aria-hidden="true" />
+                  </motion.span>
+                </span>
                 <p className="mt-5 font-display text-3xl text-ink">
                   {status === 'attending' ? 'Alhamdulillah! See you there.' : 'Thank you for letting us know.'}
                 </p>
@@ -318,6 +338,16 @@ export function Rsvp({ guestName }: { guestName: string | null }) {
                   {status === 'declined' && 'You will be in our thoughts and duas.'}
                   {status === 'maybe' && 'Please update your response when you know.'}
                 </p>
+                {status !== 'declined' && (
+                  <motion.div
+                    className="mt-6 text-left"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.4, ease }}
+                  >
+                    <CountdownStrip />
+                  </motion.div>
+                )}
                 <div className="mt-6 rounded-2xl bg-paper px-4 py-2">{summary}</div>
                 <button type="button" onClick={() => setView('form')} className={`${ghostBtn} mt-6`}>
                   <Pencil size={15} aria-hidden="true" /> Change my response

@@ -33,10 +33,10 @@ export interface MealOption {
 
 const events: WeddingEvent[] = [
   {
-    id: 'mylanchi',
-    name: 'Mylanchi Night',
-    dateTime: '2027-02-06T19:00:00+05:30',
-    durationMinutes: 180,
+    id: 'thalennu',
+    name: 'Thalennu Reception',
+    dateTime: '2027-02-06T18:30:00+05:30',
+    durationMinutes: 210,
     venueName: "Bride's Residence",
     address: 'Feroke, Kozhikode, Kerala',
     mapsUrl: '',
